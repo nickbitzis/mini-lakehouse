@@ -1,0 +1,39 @@
+flowchart LR
+  subgraph landing
+    src_crm[("crm (CSV)")]
+    src_billing[("billing (JSON lines)")]
+    src_product[("product (Parquet)")]
+  end
+  subgraph bronze
+    bronze_billing_events["bronze_billing_events<br/>545 rows, success"]
+    bronze_crm_customers["bronze_crm_customers<br/>941 rows, success"]
+    bronze_product_events["bronze_product_events<br/>2748 rows, success"]
+  end
+  subgraph silver
+    silver_billing_events["silver_billing_events<br/>543 rows, success"]
+    silver_customers["silver_customers<br/>146 rows, success"]
+    silver_invoices["silver_invoices<br/>402 rows, success"]
+    silver_product_events["silver_product_events<br/>2717 rows, success"]
+    silver_subscriptions["silver_subscriptions<br/>125 rows, success"]
+  end
+  subgraph gold
+    gold_churn_by_month["gold_churn_by_month<br/>8 rows, success"]
+    gold_customer_360["gold_customer_360<br/>146 rows, success"]
+    gold_daily_active_accounts["gold_daily_active_accounts<br/>7 rows, success"]
+    gold_mrr_by_month["gold_mrr_by_month<br/>8 rows, success"]
+  end
+  src_crm --> bronze_crm_customers
+  src_billing --> bronze_billing_events
+  src_product --> bronze_product_events
+  bronze_billing_events --> silver_billing_events
+  bronze_crm_customers --> silver_customers
+  silver_billing_events --> silver_invoices
+  bronze_product_events --> silver_product_events
+  silver_billing_events --> silver_subscriptions
+  silver_subscriptions --> gold_churn_by_month
+  silver_subscriptions --> gold_customer_360
+  silver_invoices --> gold_customer_360
+  silver_product_events --> gold_customer_360
+  silver_customers --> gold_customer_360
+  silver_product_events --> gold_daily_active_accounts
+  silver_subscriptions --> gold_mrr_by_month

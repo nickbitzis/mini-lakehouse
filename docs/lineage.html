@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lakehouse Lineage</title>
+<style>
+:root { --bg:#fbfaf7; --fg:#1d232b; --muted:#5d6672; --line:#dcd9d2; --card:#ffffff; --bad:#c0392b; --accent:#2f6f8f; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#14171b; --fg:#e6e8eb; --muted:#9aa3ad; --line:#2c3238; --card:#1b1f24; --bad:#ef7a6a; --accent:#7ab8d6; }
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,sans-serif; }
+main { max-width:1200px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:17px; margin:32px 0 8px; }
+p.lede { color:var(--muted); margin:0 0 16px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-size:13px; }
+th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-weight:600; }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+td.cols { color:var(--muted); max-width:340px; }
+tr.bad td:first-child { border-left:3px solid var(--bad); }
+code { font-size:12px; }
+.mermaid { min-width:720px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Lakehouse lineage</h1>
+<p class="lede">Model DAG from landing files through bronze, silver, and gold, with stats from each model's latest run.
+Red outlines mark models whose latest run failed, was blocked, or had failing tests.</p>
+<div class="card"><pre class="mermaid">flowchart LR
+  subgraph landing
+    src_crm[(&quot;crm (CSV)&quot;)]
+    src_billing[(&quot;billing (JSON lines)&quot;)]
+    src_product[(&quot;product (Parquet)&quot;)]
+  end
+  subgraph bronze
+    bronze_billing_events[&quot;bronze_billing_events&lt;br/&gt;545 rows, success&quot;]
+    bronze_crm_customers[&quot;bronze_crm_customers&lt;br/&gt;941 rows, success&quot;]
+    bronze_product_events[&quot;bronze_product_events&lt;br/&gt;2748 rows, success&quot;]
+  end
+  subgraph silver
+    silver_billing_events[&quot;silver_billing_events&lt;br/&gt;543 rows, success&quot;]
+    silver_customers[&quot;silver_customers&lt;br/&gt;146 rows, success&quot;]
+    silver_invoices[&quot;silver_invoices&lt;br/&gt;402 rows, success&quot;]
+    silver_product_events[&quot;silver_product_events&lt;br/&gt;2717 rows, success&quot;]
+    silver_subscriptions[&quot;silver_subscriptions&lt;br/&gt;125 rows, success&quot;]
+  end
+  subgraph gold
+    gold_churn_by_month[&quot;gold_churn_by_month&lt;br/&gt;8 rows, success&quot;]
+    gold_customer_360[&quot;gold_customer_360&lt;br/&gt;146 rows, success&quot;]
+    gold_daily_active_accounts[&quot;gold_daily_active_accounts&lt;br/&gt;7 rows, success&quot;]
+    gold_mrr_by_month[&quot;gold_mrr_by_month&lt;br/&gt;8 rows, success&quot;]
+  end
+  src_crm --&gt; bronze_crm_customers
+  src_billing --&gt; bronze_billing_events
+  src_product --&gt; bronze_product_events
+  bronze_billing_events --&gt; silver_billing_events
+  bronze_crm_customers --&gt; silver_customers
+  silver_billing_events --&gt; silver_invoices
+  bronze_product_events --&gt; silver_product_events
+  silver_billing_events --&gt; silver_subscriptions
+  silver_subscriptions --&gt; gold_churn_by_month
+  silver_subscriptions --&gt; gold_customer_360
+  silver_invoices --&gt; gold_customer_360
+  silver_product_events --&gt; gold_customer_360
+  silver_customers --&gt; gold_customer_360
+  silver_product_events --&gt; gold_daily_active_accounts
+  silver_subscriptions --&gt; gold_mrr_by_month
+</pre></div>
+<h2>Models</h2>
+<div class="card"><table>
+<thead><tr><th>model</th><th>layer</th><th>build</th><th>depends on</th><th>status</th><th>rows</th>
+<th>written</th><th>ms</th><th>tests</th><th>columns</th></tr></thead>
+<tbody><tr class=''><td><code>bronze_billing_events</code></td><td>bronze</td><td>ingest</td><td>-</td><td>success</td><td class='num'>545</td><td class='num'>6</td><td class='num'>112.0</td><td class='num'>-</td><td class='cols'>event_id, event_type, event_ts, customer_id, subscription_id, plan, currency, amount_cents, amount_minor</td></tr><tr class=''><td><code>bronze_crm_customers</code></td><td>bronze</td><td>ingest</td><td>-</td><td>success</td><td class='num'>941</td><td class='num'>269</td><td class='num'>123.0</td><td class='num'>-</td><td class='cols'>customer_id, company_name, country, segment, created_at, updated_at</td></tr><tr class=''><td><code>bronze_product_events</code></td><td>bronze</td><td>ingest</td><td>-</td><td>success</td><td class='num'>2748</td><td class='num'>774</td><td class='num'>73.9</td><td class='num'>-</td><td class='cols'>event_id, account_id, event_name, event_ts</td></tr><tr class=''><td><code>silver_billing_events</code></td><td>silver</td><td>incremental</td><td>bronze_billing_events</td><td>success</td><td class='num'>543</td><td class='num'>5</td><td class='num'>39.6</td><td class='num'>11/11</td><td class='cols'>event_id, event_type, event_ts, event_date, customer_id, subscription_id, plan, amount_cents, currency, arrived_date</td></tr><tr class=''><td><code>silver_customers</code></td><td>silver</td><td>incremental</td><td>bronze_crm_customers</td><td>success</td><td class='num'>146</td><td class='num'>0</td><td class='num'>52.6</td><td class='num'>6/6</td><td class='cols'>customer_id, company_name, country, segment, created_at, updated_at</td></tr><tr class=''><td><code>silver_invoices</code></td><td>silver</td><td>table</td><td>silver_billing_events</td><td>success</td><td class='num'>402</td><td class='num'>0</td><td class='num'>24.2</td><td class='num'>4/4</td><td class='cols'>invoice_id, customer_id, subscription_id, plan, paid_at, paid_date, amount_usd</td></tr><tr class=''><td><code>silver_product_events</code></td><td>silver</td><td>incremental</td><td>bronze_product_events</td><td>success</td><td class='num'>2717</td><td class='num'>764</td><td class='num'>41.5</td><td class='num'>6/6</td><td class='cols'>event_id, customer_id, event_name, event_ts, event_date</td></tr><tr class=''><td><code>silver_subscriptions</code></td><td>silver</td><td>table</td><td>silver_billing_events</td><td>success</td><td class='num'>125</td><td class='num'>0</td><td class='num'>32.6</td><td class='num'>6/6</td><td class='cols'>subscription_id, customer_id, plan, started_at, ended_at, mrr_usd, is_active</td></tr><tr class=''><td><code>gold_churn_by_month</code></td><td>gold</td><td>table</td><td>silver_subscriptions</td><td>success</td><td class='num'>8</td><td class='num'>0</td><td class='num'>23.3</td><td class='num'>4/4</td><td class='cols'>month, subscriptions_at_start, churned, churned_mrr_usd, logo_churn_rate</td></tr><tr class=''><td><code>gold_customer_360</code></td><td>gold</td><td>table</td><td>silver_subscriptions, silver_invoices, silver_product_events, silver_customers</td><td>success</td><td class='num'>146</td><td class='num'>0</td><td class='num'>35.8</td><td class='num'>3/3</td><td class='cols'>customer_id, company_name, segment, country, created_at, status, current_plan, mrr_usd, lifetime_revenue_usd, invoices, last_paid_at, last_seen_at, events_last_7d</td></tr><tr class=''><td><code>gold_daily_active_accounts</code></td><td>gold</td><td>table</td><td>silver_product_events</td><td>success</td><td class='num'>7</td><td class='num'>0</td><td class='num'>18.0</td><td class='num'>2/2</td><td class='cols'>event_date, active_accounts, events</td></tr><tr class=''><td><code>gold_mrr_by_month</code></td><td>gold</td><td>table</td><td>silver_subscriptions</td><td>success</td><td class='num'>8</td><td class='num'>0</td><td class='num'>24.2</td><td class='num'>5/5</td><td class='cols'>month, active_subscriptions, mrr_usd, new_mrr_usd, churned_mrr_usd</td></tr></tbody></table></div>
+<h2>Recent runs</h2>
+<div class="card"><table><thead><tr><th>run</th><th>command</th><th>started</th><th>as of</th><th>status</th>
+<th>gate</th></tr></thead><tbody><tr><td><code>r20261106T122905-6b0eea</code></td><td>backfill</td><td>2026-11-06 12:29:05</td><td>2026-11-02</td><td>success</td><td></td></tr><tr><td><code>r20261106T122904-400208</code></td><td>run</td><td>2026-11-06 12:29:04</td><td>2026-11-02</td><td>success</td><td></td></tr><tr><td><code>r20261106T122903-5ba2e3</code></td><td>run</td><td>2026-11-06 12:29:03</td><td>2026-11-01</td><td>success</td><td></td></tr><tr><td><code>r20261106T122901-f2a727</code></td><td>run</td><td>2026-11-06 12:29:01</td><td>2026-11-01</td><td>success</td><td></td></tr></tbody></table></div>
+<h2>Schema changes</h2>
+<div class="card"><table><thead><tr><th>source</th><th>column</th><th>change</th><th>batch</th></tr></thead>
+<tbody><tr><td>bronze_billing_events</td><td><code>amount_minor</code></td><td>added</td><td><code>billing-2026-10-30-f1fcb8d9</code></td></tr><tr><td>bronze_billing_events</td><td><code>amount_cents</code></td><td>missing</td><td><code>billing-2026-10-30-f1fcb8d9</code></td></tr></tbody></table></div>
+</main>
+<script type="application/json" id="stats">{&quot;silver_customers&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 146, &quot;rows_touched&quot;: 0, &quot;partitions_touched&quot;: &quot;&quot;, &quot;duration_ms&quot;: 52.6, &quot;started_at&quot;: &quot;2026-11-06 12:29:05.919275&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 6, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;silver_subscriptions&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 125, &quot;rows_touched&quot;: 0, &quot;partitions_touched&quot;: &quot;&quot;, &quot;duration_ms&quot;: 32.6, &quot;started_at&quot;: &quot;2026-11-06 12:29:06.025661&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 6, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;gold_customer_360&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 146, &quot;rows_touched&quot;: 0, &quot;partitions_touched&quot;: &quot;&quot;, &quot;duration_ms&quot;: 35.8, &quot;started_at&quot;: &quot;2026-11-06 12:29:06.200150&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 3, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;bronze_product_events&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 2748, &quot;rows_touched&quot;: 774, &quot;partitions_touched&quot;: &quot;2026-10-30,2026-10-31&quot;, &quot;duration_ms&quot;: 73.9, &quot;started_at&quot;: &quot;2026-11-06 12:29:05.821229&quot;, &quot;message&quot;: &quot;2 files loaded, 0 already loaded&quot;, &quot;tests_passed&quot;: 0, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;gold_daily_active_accounts&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 7, &quot;rows_touched&quot;: 0, &quot;partitions_touched&quot;: &quot;&quot;, &quot;duration_ms&quot;: 18.0, &quot;started_at&quot;: &quot;2026-11-06 12:29:06.220597&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 2, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;silver_product_events&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 2717, &quot;rows_touched&quot;: 764, &quot;partitions_touched&quot;: &quot;2026-10-30,2026-10-31&quot;, &quot;duration_ms&quot;: 41.5, &quot;started_at&quot;: &quot;2026-11-06 12:29:05.990197&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 6, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;silver_billing_events&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 543, &quot;rows_touched&quot;: 5, &quot;partitions_touched&quot;: &quot;2026-10-30,2026-10-31&quot;, &quot;duration_ms&quot;: 39.6, &quot;started_at&quot;: &quot;2026-11-06 12:29:05.864147&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 11, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;silver_invoices&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 402, &quot;rows_touched&quot;: 0, &quot;partitions_touched&quot;: &quot;&quot;, &quot;duration_ms&quot;: 24.2, &quot;started_at&quot;: &quot;2026-11-06 12:29:05.946413&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 4, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;gold_churn_by_month&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 8, &quot;rows_touched&quot;: 0, &quot;partitions_touched&quot;: &quot;&quot;, &quot;duration_ms&quot;: 23.3, &quot;started_at&quot;: &quot;2026-11-06 12:29:06.161735&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 4, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;gold_mrr_by_month&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 8, &quot;rows_touched&quot;: 0, &quot;partitions_touched&quot;: &quot;&quot;, &quot;duration_ms&quot;: 24.2, &quot;started_at&quot;: &quot;2026-11-06 12:29:06.246996&quot;, &quot;message&quot;: &quot;&quot;, &quot;tests_passed&quot;: 5, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;bronze_crm_customers&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 941, &quot;rows_touched&quot;: 269, &quot;partitions_touched&quot;: &quot;2026-10-30,2026-10-31&quot;, &quot;duration_ms&quot;: 123.0, &quot;started_at&quot;: &quot;2026-11-06 12:29:05.743476&quot;, &quot;message&quot;: &quot;2 files loaded, 0 already loaded&quot;, &quot;tests_passed&quot;: 0, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}, &quot;bronze_billing_events&quot;: {&quot;run_id&quot;: &quot;r20261106T122905-6b0eea&quot;, &quot;status&quot;: &quot;success&quot;, &quot;rows&quot;: 545, &quot;rows_touched&quot;: 6, &quot;partitions_touched&quot;: &quot;2026-10-30,2026-10-31&quot;, &quot;duration_ms&quot;: 112.0, &quot;started_at&quot;: &quot;2026-11-06 12:29:05.617025&quot;, &quot;message&quot;: &quot;2 files loaded, 0 already loaded&quot;, &quot;tests_passed&quot;: 0, &quot;tests_failed&quot;: 0, &quot;tests_warned&quot;: 0}}</script>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+</script>
+</body>
+</html>
