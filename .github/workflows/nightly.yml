@@ -1,0 +1,51 @@
+# Example of an orchestrated run: each night, process yesterday's partition,
+# run the quality tests, and publish lineage. A real deployment would point
+# MINILAKEHOUSE_HOME at durable storage instead of a fresh runner.
+name: nightly
+
+on:
+  schedule:
+    - cron: "15 6 * * *"  # 06:15 UTC, after upstream exports land
+  workflow_dispatch:
+    inputs:
+      backfill_from:
+        description: "Optional backfill start (YYYY-MM-DD)"
+        required: false
+      backfill_to:
+        description: "Optional backfill end (YYYY-MM-DD)"
+        required: false
+
+concurrency:
+  group: nightly-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MINILAKEHOUSE_HOME: lakehouse
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --python 3.12
+      - name: Land sources (synthetic stand-in for upstream exports)
+        run: uv run minilakehouse generate --days 7
+      - name: Run pipeline
+        run: uv run minilakehouse run
+      - name: Backfill
+        if: ${{ inputs.backfill_from != '' && inputs.backfill_to != '' }}
+        env:
+          BACKFILL_FROM: ${{ inputs.backfill_from }}
+          BACKFILL_TO: ${{ inputs.backfill_to }}
+        run: uv run minilakehouse backfill --from "$BACKFILL_FROM" --to "$BACKFILL_TO"
+      - name: Quality tests
+        run: uv run minilakehouse test
+      - name: Lineage
+        if: always()
+        run: uv run minilakehouse lineage --out site
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-lineage-${{ github.run_number }}
+          path: site/

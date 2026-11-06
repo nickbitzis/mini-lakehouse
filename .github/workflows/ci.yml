@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --python 3.12
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
+  pipeline:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    env:
+      MINILAKEHOUSE_HOME: lakehouse
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --python 3.12
+      - name: Generate 7 days of synthetic sources
+        run: uv run minilakehouse generate --days 7
+      - name: Run days 1 to 6
+        run: uv run minilakehouse run --through 2026-11-01
+      - name: Rerun the same days (must change nothing)
+        run: uv run minilakehouse run --through 2026-11-01
+      - name: Run day 7 incrementally
+        run: uv run minilakehouse run
+      - name: Data quality tests
+        run: uv run minilakehouse test
+      - name: Export lineage
+        run: uv run minilakehouse lineage --out site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lineage
+          path: site/
+
+  docker:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: minilakehouse:ci
